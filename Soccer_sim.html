@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scratch-Style AI Soccer - V3</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { margin: 0 0 10px 0; }
+        
+        .scoreboard {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: #1e1e1e;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 2px solid #333;
+        }
+        .red-score { color: #ff5252; }
+        .blue-score { color: #448aff; }
+
+        canvas {
+            background-color: #2e7d32;
+            border: 4px solid #fff;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+            margin-bottom: 10px;
+        }
+
+        .workspace-container {
+            display: flex;
+            gap: 15px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .team-panel {
+            flex: 1;
+            background: #1e1e1e;
+            border-radius: 8px;
+            border: 2px solid;
+            display: flex;
+            flex-direction: column;
+        }
+        #panel-red { border-color: #ff5252; }
+        #panel-blue { border-color: #448aff; }
+
+        /* Tabs */
+        .tabs { display: flex; background: #000; border-radius: 6px 6px 0 0; }
+        .tab {
+            flex: 1; text-align: center; padding: 10px; cursor: pointer;
+            font-weight: bold; border-bottom: 3px solid transparent; transition: 0.2s;
+        }
+        #panel-red .tab.active { background: #3a1a1a; border-bottom-color: #ff5252; }
+        #panel-blue .tab.active { background: #1a1a3a; border-bottom-color: #448aff; }
+
+        /* Toolbox & Editor */
+        .toolbox {
+            padding: 10px;
+            background: #2a2a2a;
+            display: flex;
+            gap: 10px;
+            border-bottom: 2px solid #111;
+            flex-wrap: wrap;
+        }
+        .toolbox button {
+            padding: 6px 12px; font-size: 12px; font-weight: bold;
+            border: none; border-radius: 4px; cursor: pointer; color: #fff;
+        }
+        .btn-add-if { background: #FFAB19; color: #000 !important; }
+        .btn-add-move { background: #4C97FF; }
+        .btn-add-action { background: #FF6680; }
+
+        .editor-area {
+            padding: 15px;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 450px;
+            background: #222;
+        }
+        .player-script { display: none; min-height: 100px; }
+        .player-script.active { display: block; }
+
+        /* Scratch-style Blocks */
+        .block {
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .block-move { background-color: #4C97FF; border: 1px solid #3373CC; }
+        .block-action { background-color: #FF6680; border: 1px solid #FF4D6A; }
+        .block-if {
+            background-color: #FFAB19; 
+            border: 1px solid #CC8814; 
+            color: #000;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .if-header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%; }
+        .nested-blocks {
+            min-height: 30px;
+            width: calc(100% - 20px);
+            background: rgba(0,0,0,0.1);
+            border-radius: 4px;
+            margin-top: 5px;
+            margin-left: 15px;
+            padding: 5px;
+            border-left: 4px solid rgba(0,0,0,0.2);
+        }
+
+        select, input {
+            padding: 4px; border-radius: 4px; border: none; font-weight: bold; outline: none; 
+            background: #fff; color: #000; font-family: monospace;
+        }
+        input[type="number"] { width: 50px; text-align: center; }
+        
+        .del-btn {
+            background: rgba(0,0,0,0.2); border: none; color: inherit; font-weight: bold;
+            border-radius: 50%; width: 24px; height: 24px; cursor: pointer;
+            position: absolute; right: 5px; top: 5px;
+        }
+        .del-btn:hover { background: rgba(0,0,0,0.4); }
+
+        /* Game Controls */
+        .controls { display: flex; gap: 10px; margin-bottom: 10px; }
+        .play-btn { background: #4CAF50; color: white; border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; }
+        .stop-btn { background: #f44336; color: white; border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; }
+
+    </style>
+</head>
+<body>
+
+    <h1>🐱 Scratch-Style Soccer AI V3</h1>
+    
+    <div class="controls">
+        <button class="play-btn" onclick="startGame()">▶ Compile & Play</button>
+        <button class="stop-btn" onclick="resetGame()">⏹ Reset Board</button>
+    </div>
+
+    <div class="scoreboard">
+        <span class="red-score">Red: <span id="scoreRed">0</span></span> | 
+        <span class="blue-score">Blue: <span id="scoreBlue">0</span></span>
+    </div>
+
+    <canvas id="pitch" width="800" height="400"></canvas>
+
+    <div class="workspace-container" id="workspaces"></div>
+
+    <script>
+        // --- 1. UI & BLOCK BUILDER ---
+        
+        function createTeamUI(teamId) {
+            let html = `
+            <div class="team-panel" id="panel-${teamId}">
+                <div class="tabs">`;
+            for(let i=0; i<4; i++) {
+                html += `<div class="tab ${i===0?'active':''}" onclick="switchTab('${teamId}', ${i})">Player ${i+1}</div>`;
+            }
+            html += `</div>
+                <div class="toolbox">
+                    <button class="btn-add-move" onclick="addBlock('${teamId}', 'move')">+ Move</button>
+                    <button class="btn-add-action" onclick="addBlock('${teamId}', 'action')">+ Action</button>
+                    <button class="btn-add-if" onclick="addBlock('${teamId}', 'if')">+ If</button>
+                </div>
+                <div class="editor-area">`;
+            
+            for(let i=0; i<4; i++) {
+                html += `<div class="player-script ${i===0?'active':''}" id="script-${teamId}-${i}"></div>`;
+            }
+            html += `</div></div>`;
+            return html;
+        }
+
+        document.getElementById('workspaces').innerHTML = createTeamUI('red') + createTeamUI('blue');
+
+        window.switchTab = function(teamId, pIndex) {
+            document.querySelectorAll(`#panel-${teamId} .tab`).forEach(e => e.classList.remove('active'));
+            document.querySelectorAll(`#panel-${teamId} .player-script`).forEach(e => e.classList.remove('active'));
+            document.querySelectorAll(`#panel-${teamId} .tab`)[pIndex].classList.add('active');
+            document.getElementById(`script-${teamId}-${pIndex}`).classList.add('active');
+        };
+
+        window.toggleCoords = function(selectElem) {
+            const coordSpan = selectElem.parentElement.querySelector('.coords');
+            if(coordSpan) {
+                if(selectElem.value === 'coord' || selectElem.value === 'kick_coord') {
+                    coordSpan.style.display = 'inline';
+                } else {
+                    coordSpan.style.display = 'none';
+                }
+            }
+        };
+
+        window.addBlock = function(teamId, type, parentContainerId = null) {
+            let container = parentContainerId ? document.getElementById(parentContainerId) : 
+                document.querySelector(`#panel-${teamId} .player-script.active`);
+            
+            let blockId = 'block_' + Math.random().toString(36).substr(2, 9);
+            let block = document.createElement('div');
+            
+            if (type === 'move') {
+                block.className = 'block block-move';
+                block.dataset.type = 'move';
+                block.innerHTML = `
+                    Move to: 
+                    <select class="val-target" onchange="toggleCoords(this)">
+                        <option value="ball">The Ball</option>
+                        <option value="defend">Defend Goal</option>
+                        <option value="attack">Enemy Goal</option>
+                        <option value="random">Random Position</option>
+                        <option value="coord">Specific Coordinate</option>
+                    </select>
+                    <span class="coords" style="display:none;">
+                        X: <input type="number" class="val-x" value="400"> 
+                        Y: <input type="number" class="val-y" value="200">
+                    </span>
+                    <button class="del-btn" onclick="this.parentElement.remove()">X</button>
+                `;
+            } 
+            else if (type === 'action') {
+                block.className = 'block block-action';
+                block.dataset.type = 'action';
+                block.innerHTML = `
+                    Action: 
+                    <select class="val-action" onchange="toggleCoords(this)">
+                        <option value="shoot">Shoot at Goal</option>
+                        <option value="clear">Clear to Center</option>
+                        <option value="random">Random Kick</option>
+                        <option value="kick_coord">Kick to Coordinate</option>
+                    </select>
+                    <span class="coords" style="display:none;">
+                        X: <input type="number" class="val-x" value="400"> 
+                        Y: <input type="number" class="val-y" value="200">
+                    </span>
+                    <button class="del-btn" onclick="this.parentElement.remove()">X</button>
+                `;
+            }
+            else if (type === 'if') {
+                let nestedId = 'nested_' + blockId;
+                block.className = 'block block-if';
+                block.dataset.type = 'if';
+                block.innerHTML = `
+                    <div class="if-header">
+                        If: 
+                        <select class="val-cond">
+                            <option value="dist_less">Distance to Ball < </option>
+                            <option value="dist_greater">Distance to Ball > </option>
+                            <option value="random_chance">Random % Chance < </option>
+                            <option value="my_half">I am in my half</option>
+                        </select>
+                        <input type="number" class="val-num" value="50">
+                        <button class="del-btn" onclick="this.parentElement.parentElement.remove()">X</button>
+                    </div>
+                    <div class="toolbox" style="background:transparent; padding:0; margin-top:5px;">
+                        <button class="btn-add-move" onclick="addBlock('${teamId}', 'move', '${nestedId}')">+ Move</button>
+                        <button class="btn-add-action" onclick="addBlock('${teamId}', 'action', '${nestedId}')">+ Action</button>
+                        <button class="btn-add-if" onclick="addBlock('${teamId}', 'if', '${nestedId}')">+ If Inside</button>
+                    </div>
+                    <div class="nested-blocks" id="${nestedId}"></div>
+                `;
+            }
+            container.appendChild(block);
+        };
+
+        // Setup some basic defaults
+        addBlock('red', 'move'); addBlock('red', 'action');
+        document.querySelectorAll(`#panel-blue .tab`)[0].click();
+        addBlock('blue', 'move'); addBlock('blue', 'if');
+
+
+        // --- 2. PARSER (HTML -> JSON AST) ---
+        let compiledScripts = { red: [[],[],[],[]], blue: [[],[],[],[]] };
+
+        function parseContainer(container) {
+            let script = [];
+            for(let el of container.children) {
+                if(el.classList.contains('toolbox')) continue;
+                
+                if(el.dataset.type === 'move') {
+                    script.push({ 
+                        type: 'move', 
+                        target: el.querySelector('.val-target').value,
+                        x: parseFloat(el.querySelector('.val-x').value) || 0,
+                        y: parseFloat(el.querySelector('.val-y').value) || 0
+                    });
+                } else if(el.dataset.type === 'action') {
+                    script.push({ 
+                        type: 'action', 
+                        action: el.querySelector('.val-action').value,
+                        x: parseFloat(el.querySelector('.val-x').value) || 0,
+                        y: parseFloat(el.querySelector('.val-y').value) || 0
+                    });
+                } else if(el.dataset.type === 'if') {
+                    let nestedContainer = el.querySelector('.nested-blocks');
+                    script.push({ 
+                        type: 'if', 
+                        condition: el.querySelector('.val-cond').value,
+                        num: parseFloat(el.querySelector('.val-num').value) || 0,
+                        then: nestedContainer ? parseContainer(nestedContainer) : []
+                    });
+                }
+            }
+            return script;
+        }
+
+        window.startGame = function() {
+            ['red', 'blue'].forEach(teamId => {
+                for(let i=0; i<4; i++) {
+                    let container = document.getElementById(`script-${teamId}-${i}`);
+                    compiledScripts[teamId][i] = parseContainer(container);
+                }
+            });
+            isPlaying = true;
+        }
+
+
+        // --- 3. GAME ENGINE ---
+        const canvas = document.getElementById('pitch');
+        const ctx = canvas.getContext('2d');
+
+        let score = { red: 0, blue: 0 };
+        let isPlaying = false;
+        let ball, playersRed, playersBlue;
+
+        function resetGame() {
+            isPlaying = false;
+            ball = { x: 400, y: 200, vx: 0, vy: 0, radius: 8 };
+            playersRed = [
+                { id: 0, x: 100, y: 200, vx: 0, vy: 0, rx: 100, ry: 200 },
+                { id: 1, x: 250, y: 100, vx: 0, vy: 0, rx: 250, ry: 100 },
+                { id: 2, x: 250, y: 300, vx: 0, vy: 0, rx: 250, ry: 300 },
+                { id: 3, x: 350, y: 200, vx: 0, vy: 0, rx: 350, ry: 200 }
+            ];
+            playersBlue = [
+                { id: 0, x: 700, y: 200, vx: 0, vy: 0, rx: 700, ry: 200 },
+                { id: 1, x: 550, y: 100, vx: 0, vy: 0, rx: 550, ry: 100 },
+                { id: 2, x: 550, y: 300, vx: 0, vy: 0, rx: 550, ry: 300 },
+                { id: 3, x: 450, y: 200, vx: 0, vy: 0, rx: 450, ry: 200 }
+            ];
+            score = { red: 0, blue: 0 };
+            document.getElementById('scoreRed').innerText = 0;
+            document.getElementById('scoreBlue').innerText = 0;
+        }
+
+        function drawField() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(400, 0); ctx.lineTo(400, 400); ctx.stroke();
+            ctx.beginPath(); ctx.arc(400, 200, 50, 0, Math.PI*2); ctx.stroke();
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.fillRect(0, 125, 30, 150); // Red Net
+            ctx.fillRect(770, 125, 30, 150); // Blue Net
+        }
+
+        function drawEntity(entity, color, radius) {
+            ctx.beginPath(); ctx.arc(entity.x, entity.y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color; ctx.fill();
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke();
+        }
+
+        // --- 4. AST EVALUATOR (Recursive) ---
+        function evaluateScript(script, player, teamId) {
+            for(let block of script) {
+                if (block.type === 'if') {
+                    let conditionMet = false;
+                    let bDist = Math.hypot(ball.x - player.x, ball.y - player.y);
+                    
+                    if (block.condition === 'dist_less' && bDist < block.num) conditionMet = true;
+                    if (block.condition === 'dist_greater' && bDist > block.num) conditionMet = true;
+                    if (block.condition === 'random_chance' && (Math.random() * 100) < block.num) conditionMet = true;
+                    if (block.condition === 'my_half') {
+                        conditionMet = (teamId === 'red' && player.x < 400) || (teamId === 'blue' && player.x > 400);
+                    }
+
+                    if (conditionMet) {
+                        evaluateScript(block.then, player, teamId); // Recursively execute inner blocks
+                    }
+                } 
+                else if (block.type === 'move') {
+                    let tx = player.x, ty = player.y;
+                    
+                    if (block.target === 'ball') { tx = ball.x; ty = ball.y; }
+                    if (block.target === 'defend') { tx = (teamId==='red')?50:750; ty = ball.y; }
+                    if (block.target === 'attack') { tx = (teamId==='red')?750:50; ty = 200; }
+                    if (block.target === 'coord') { tx = block.x; ty = block.y; }
+                    if (block.target === 'random') {
+                        if(Math.random() < 0.05) { player.rx = Math.random()*800; player.ry = Math.random()*400; }
+                        tx = player.rx; ty = player.ry;
+                    }
+                    
+                    let dx = tx - player.x, dy = ty - player.y;
+                    let dist = Math.hypot(dx, dy);
+                    if(dist > 2) {
+                        player.vx = (dx/dist) * 2.8; player.vy = (dy/dist) * 2.8;
+                    }
+                } 
+                else if (block.type === 'action') {
+                    let bDist = Math.hypot(ball.x - player.x, ball.y - player.y);
+                    if (bDist < 20) { 
+                        let kickPower = 8;
+                        let tx = 400, ty = 200; 
+                        
+                        if (block.action === 'shoot') { tx = (teamId==='red')?800:0; ty = 200; }
+                        if (block.action === 'clear') { tx = 400; ty = 200; }
+                        if (block.action === 'kick_coord') { tx = block.x; ty = block.y; }
+                        if (block.action === 'random') { tx = ball.x + (Math.random()-0.5)*100; ty = ball.y + (Math.random()-0.5)*100; }
+                        
+                        let dx = tx - ball.x, dy = ty - ball.y;
+                        let dist = Math.hypot(dx, dy) || 1;
+                        ball.vx += (dx/dist) * kickPower; ball.vy += (dy/dist) * kickPower;
+                    }
+                }
+            }
+        }
+
+        function updatePhysics() {
+            if (!isPlaying) return;
+
+            playersRed.forEach((p, i) => { p.vx *= 0.8; p.vy *= 0.8; evaluateScript(compiledScripts.red[i], p, 'red'); });
+            playersBlue.forEach((p, i) => { p.vx *= 0.8; p.vy *= 0.8; evaluateScript(compiledScripts.blue[i], p, 'blue'); });
+
+            [...playersRed, ...playersBlue].forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                p.x = Math.max(10, Math.min(790, p.x));
+                p.y = Math.max(10, Math.min(390, p.y));
+            });
+
+            ball.x += ball.vx; ball.y += ball.vy;
+            ball.vx *= 0.95; ball.vy *= 0.95; 
+
+            if(ball.y < 8 || ball.y > 392) ball.vy *= -1;
+            if(ball.x < 15) {
+                if(ball.y > 125 && ball.y < 275) { score.blue++; setupKickoff(); } else ball.vx *= -1;
+            }
+            if(ball.x > 785) {
+                if(ball.y > 125 && ball.y < 275) { score.red++; setupKickoff(); } else ball.vx *= -1;
+            }
+
+            document.getElementById('scoreRed').innerText = score.red;
+            document.getElementById('scoreBlue').innerText = score.blue;
+        }
+
+        function setupKickoff() {
+            ball = { x: 400, y: 200, vx: 0, vy: 0, radius: 8 };
+            playersRed.forEach(p => { p.x = p.rx; p.y = p.ry; });
+            playersBlue.forEach(p => { p.x = p.rx; p.y = p.ry; });
+        }
+
+        function loop() {
+            drawField();
+            updatePhysics();
+            playersRed.forEach(p => drawEntity(p, '#ff5252', 12));
+            playersBlue.forEach(p => drawEntity(p, '#448aff', 12));
+            drawEntity(ball, '#ffffff', 8);
+            requestAnimationFrame(loop);
+        }
+
+        resetGame();
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
